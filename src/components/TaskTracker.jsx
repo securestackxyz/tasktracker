@@ -6,6 +6,8 @@ import {
   subDays,
   isEqual,
   startOfWeek,
+  isSameDay,
+  startOfDay,
 } from "date-fns";
 import {
   AlertCircle,
@@ -13,6 +15,8 @@ import {
   PlusCircle,
   RotateCw,
   Trash2,
+  Moon,
+  Sun,
 } from "lucide-react";
 import {
   Alert,
@@ -35,6 +39,8 @@ import {
   VStack,
   HStack,
   useColorModeValue,
+  useColorMode,
+  Switch,
 } from "@chakra-ui/react";
 
 const MotionBox = motion(Box);
@@ -111,7 +117,7 @@ const StreakCalendar = ({ streakData }) => {
               >
                 <Box
                   aspectRatio={1}
-                  rounded="sm"
+                  borderRadius={{ base: "5px" }}
                   transition="all 0.2s"
                   _hover={{ transform: "scale(1.5)" }}
                   bg={
@@ -164,6 +170,7 @@ const TaskTracker = () => {
     return saved ? JSON.parse(saved) : [];
   });
   const [newTask, setNewTask] = useState("");
+  const [isTaskDaily, setIsTaskDaily] = useState(true);
   const [streak, setStreak] = useState(() => {
     const saved = localStorage.getItem("streak");
     return saved ? JSON.parse(saved) : 0;
@@ -176,8 +183,28 @@ const TaskTracker = () => {
     const saved = localStorage.getItem("lastCompletedDate");
     return saved ? JSON.parse(saved) : null;
   });
+  const [lastCheckedDate, setLastCheckedDate] = useState(() => {
+    const saved = localStorage.getItem("lastCheckedDate");
+    return saved ? new Date(JSON.parse(saved)) : new Date();
+  });
   const [deletedTasks, setDeletedTasks] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
+  const { colorMode, toggleColorMode } = useColorMode();
+
+  useEffect(() => {
+    const currentDate = startOfDay(new Date());
+    const lastChecked = startOfDay(new Date(lastCheckedDate));
+
+    if (!isSameDay(currentDate, lastChecked)) {
+      setTasks((prevTasks) =>
+        prevTasks.map((task) => ({
+          ...task,
+          completed: task.isDaily ? false : task.completed,
+        }))
+      );
+      setLastCheckedDate(currentDate);
+    }
+  }, [lastCheckedDate]);
 
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
@@ -187,7 +214,8 @@ const TaskTracker = () => {
       JSON.stringify(lastCompletedDate)
     );
     localStorage.setItem("streakData", JSON.stringify(streakData));
-  }, [tasks, streak, lastCompletedDate, streakData]);
+    localStorage.setItem("lastCheckedDate", JSON.stringify(lastCheckedDate));
+  }, [tasks, streak, lastCompletedDate, streakData, lastCheckedDate]);
 
   const addTask = () => {
     if (newTask.trim()) {
@@ -201,6 +229,7 @@ const TaskTracker = () => {
           category: "personal",
           dueTime: null,
           notes: "",
+          isDaily: isTaskDaily,
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -252,12 +281,7 @@ const TaskTracker = () => {
   const borderColor = useColorModeValue("gray.200", "gray.700");
 
   return (
-    <Box
-      minH="100vh"
-      w="100%"
-      bg={useColorModeValue("gray.50", "gray.900")}
-      /*  p={8} */
-    >
+    <Box minH="100vh" w="100%" bg={useColorModeValue("gray.50", "gray.900")}>
       <Box maxW="2xl" mx="auto">
         <Card w="100%">
           <CardHeader>
@@ -266,9 +290,18 @@ const TaskTracker = () => {
                 <Text fontSize="2xl" fontWeight="bold">
                   Daily Tasks
                 </Text>
-                <Text fontSize="sm" color="gray.500">
-                  Streak: {streak} days
-                </Text>
+                <HStack spacing={4}>
+                  <Text fontSize="sm" color="gray.500">
+                    Streak: {streak} days
+                  </Text>
+                  <Button onClick={toggleColorMode} variant="ghost" size="sm">
+                    {colorMode === "light" ? (
+                      <Moon size={16} />
+                    ) : (
+                      <Sun size={16} />
+                    )}
+                  </Button>
+                </HStack>
               </Flex>
               <StreakCalendar streakData={streakData} />
               <StatisticsPanel tasks={tasks} streak={streak} />
@@ -277,24 +310,46 @@ const TaskTracker = () => {
 
           <CardBody>
             <VStack spacing={4}>
-              <HStack w="full">
+              <VStack w="full" spacing={2}>
                 <Input
                   value={newTask}
                   onChange={(e) => setNewTask(e.target.value)}
                   onKeyPress={(e) => e.key === "Enter" && addTask()}
                   placeholder="Add a new task..."
-                  flex={1}
+                  _focus={{
+                    borderColor: "black",
+                    boxShadow: "0 0 0 1px black",
+                  }}
                 />
-                <Button
-                  onClick={addTask}
-                  bg="black"
-                  color="white"
-                  _hover={{ bg: "gray.800" }}
-                  leftIcon={<PlusCircle size={16} />}
-                >
-                  Add
-                </Button>
-              </HStack>
+                <Flex w="full" justify="space-between" align="center">
+                  <HStack>
+                    <Switch
+                      isChecked={isTaskDaily}
+                      onChange={(e) => setIsTaskDaily(e.target.checked)}
+                      sx={{
+                        "& .chakra-switch__track": {
+                          bg: "gray.200", // Background color when unchecked
+                        },
+                        "& .chakra-switch__track[data-checked]": {
+                          bg: "black", // Background color when checked
+                        },
+                      }}
+                    />
+                    <Text fontSize="sm" color="gray.500">
+                      Reset daily
+                    </Text>
+                  </HStack>
+                  <Button
+                    onClick={addTask}
+                    bg="black"
+                    color="white"
+                    _hover={{ bg: "gray.800" }}
+                    leftIcon={<PlusCircle size={16} />}
+                  >
+                    Add
+                  </Button>
+                </Flex>
+              </VStack>
 
               <AnimatePresence>
                 {tasks.map((task) => (
@@ -312,15 +367,27 @@ const TaskTracker = () => {
                     borderColor={borderColor}
                     _hover={{ shadow: "md" }}
                     transition="all 0.2s"
+                    width="100%" //hereo
                   >
-                    <Flex align="center" gap={3}>
+                    <Flex w="100%" align="center" gap={3}>
                       <Checkbox
                         isChecked={task.completed}
                         onChange={() => toggleTask(task.id)}
                         _hover={{ transform: "scale(1.1)" }}
+                        sx={{
+                          "& .chakra-checkbox__control": {
+                            bg: "gray.200", // Background color when unchecked
+                            borderRadius: "3px",
+                          },
+                          "& .chakra-checkbox__control[data-checked]": {
+                            bg: "black", // Background color when checked
+                            borderColor: "black", // Border color when checked
+                            borderRadius: "3px",
+                          },
+                        }}
                       />
 
-                      <Box flex={1} minW={0}>
+                      <Box flex={1} minW={0} w="100%">
                         <HStack>
                           <Box
                             px={2}
@@ -351,9 +418,22 @@ const TaskTracker = () => {
                                 .label
                             }
                           </Box>
+                          {task.isDaily && (
+                            <Box
+                              px={2}
+                              py={0.5}
+                              rounded="full"
+                              bg="gray.100"
+                              color="gray.700"
+                              fontSize="sm"
+                            >
+                              Daily
+                            </Box>
+                          )}
                         </HStack>
                         <Text
                           mt={1}
+                          textAlign="left"
                           textDecoration={
                             task.completed ? "line-through" : "none"
                           }
@@ -404,6 +484,17 @@ const TaskTracker = () => {
                                 Set Category: {category.label}
                               </MenuItem>
                             ))}
+                            <MenuItem
+                              onClick={() =>
+                                updateTaskDetails(task.id, {
+                                  isDaily: !task.isDaily,
+                                })
+                              }
+                            >
+                              {task.isDaily
+                                ? "Remove Daily Reset"
+                                : "Set as Daily Reset"}
+                            </MenuItem>
                           </MenuList>
                         </Menu>
                         <Button
@@ -420,7 +511,7 @@ const TaskTracker = () => {
               </AnimatePresence>
 
               {deletedTasks.length > 0 && (
-                <Alert status="info">
+                <Alert borderRadius="10px" status="info">
                   <AlertCircle size={16} />
                   <AlertDescription display="flex" alignItems="center" gap={2}>
                     Task deleted
