@@ -20,6 +20,10 @@ import {
   Edit2,
   Check,
   X,
+  Clock,
+  BarChart2,
+  Plus,
+  Minus,
 } from "lucide-react";
 import {
   Alert,
@@ -45,6 +49,12 @@ import {
   useColorMode,
   Switch,
   IconButton,
+  Progress,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
 } from "@chakra-ui/react";
 
 const MotionBox = motion(Box);
@@ -175,6 +185,9 @@ const TaskTracker = () => {
   });
   const [newTask, setNewTask] = useState("");
   const [isTaskDaily, setIsTaskDaily] = useState(true);
+  const [isTaskTemporary, setIsTaskTemporary] = useState(false);
+  const [isMultiLevel, setIsMultiLevel] = useState(false);
+  const [targetCount, setTargetCount] = useState(1);
   const [streak, setStreak] = useState(() => {
     const saved = localStorage.getItem("streak");
     return saved ? JSON.parse(saved) : 0;
@@ -206,6 +219,7 @@ const TaskTracker = () => {
         prevTasks.map((task) => ({
           ...task,
           completed: task.isDaily ? false : task.completed,
+          currentCount: task.isDaily ? 0 : task.currentCount,
         }))
       );
       setLastCheckedDate(currentDate);
@@ -236,19 +250,88 @@ const TaskTracker = () => {
           dueTime: null,
           notes: "",
           isDaily: isTaskDaily,
+          isTemporary: isTaskTemporary,
+          isMultiLevel: isMultiLevel,
+          targetCount: isMultiLevel ? targetCount : 1,
+          currentCount: 0,
           createdAt: new Date().toISOString(),
         },
       ]);
       setNewTask("");
+      setTargetCount(1);
+      setIsMultiLevel(false);
+      setIsTaskTemporary(false);
     }
   };
 
   const toggleTask = (taskId) => {
-    const updatedTasks = tasks.map((task) =>
-      task.id === taskId ? { ...task, completed: !task.completed } : task
-    );
-    setTasks(updatedTasks);
+    const taskIndex = tasks.findIndex((t) => t.id === taskId);
+    const task = tasks[taskIndex];
 
+    if (!task.isMultiLevel) {
+      const newCompleted = !task.completed;
+
+      if (task.isTemporary && newCompleted) {
+        setTasks((prevTasks) => {
+          const newTasks = [...prevTasks];
+          newTasks.splice(taskIndex, 1);
+          return newTasks;
+        });
+      } else {
+        setTasks((prevTasks) =>
+          prevTasks.map((t) =>
+            t.id === taskId ? { ...t, completed: newCompleted } : t
+          )
+        );
+      }
+
+      const updatedTasks = tasks.map((t) =>
+        t.id === taskId ? { ...t, completed: newCompleted } : t
+      );
+
+      checkAllCompleted(updatedTasks);
+    }
+  };
+
+  const incrementCount = (taskId) => {
+    setTasks((prevTasks) =>
+      prevTasks
+        .map((task) => {
+          if (task.id === taskId) {
+            const newCount = Math.min(task.currentCount + 1, task.targetCount);
+            const completed = newCount === task.targetCount;
+
+            if (task.isTemporary && completed) {
+              return null;
+            }
+
+            return {
+              ...task,
+              currentCount: newCount,
+              completed: completed,
+            };
+          }
+          return task;
+        })
+        .filter(Boolean)
+    );
+  };
+
+  const decrementCount = (taskId) => {
+    setTasks((prevTasks) =>
+      prevTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              currentCount: Math.max(task.currentCount - 1, 0),
+              completed: false,
+            }
+          : task
+      )
+    );
+  };
+
+  const checkAllCompleted = (updatedTasks) => {
     const allCompleted = updatedTasks.every((task) => task.completed);
     if (allCompleted) {
       const today = new Date();
@@ -309,9 +392,14 @@ const TaskTracker = () => {
   const borderColor = useColorModeValue("gray.200", "gray.700");
 
   return (
-    <Box minH="100vh" w="100%" bg={useColorModeValue("gray.50", "gray.900")}>
-      <Box maxW="2xl" mx="auto">
-        <Card w="100%">
+    <Box
+      minH="100vh"
+      w="100%"
+      bg={useColorModeValue("gray.50", "gray.900")}
+      borderRadius="15px"
+    >
+      <Box maxW="2xl" mx="auto" p={4}>
+        <Card w="100%" borderRadius="10px">
           <CardHeader>
             <VStack spacing={4}>
               <Flex justify="space-between" w="full" align="center">
@@ -322,13 +410,17 @@ const TaskTracker = () => {
                   <Text fontSize="sm" color="gray.500">
                     Streak: {streak} days
                   </Text>
-                  <Button onClick={toggleColorMode} variant="ghost" size="sm">
+                  <IconButton
+                    onClick={toggleColorMode}
+                    variant="ghost"
+                    size="sm"
+                  >
                     {colorMode === "light" ? (
-                      <Moon size={16} />
+                      <Moon size={12} />
                     ) : (
-                      <Sun size={16} />
+                      <Sun size={12} />
                     )}
-                  </Button>
+                  </IconButton>
                 </HStack>
               </Flex>
               <StreakCalendar streakData={streakData} />
@@ -349,24 +441,88 @@ const TaskTracker = () => {
                     boxShadow: "0 0 0 1px black",
                   }}
                 />
-                <Flex w="full" justify="space-between" align="center">
-                  <HStack>
-                    <Switch
-                      isChecked={isTaskDaily}
-                      onChange={(e) => setIsTaskDaily(e.target.checked)}
-                      sx={{
-                        "& .chakra-switch__track": {
-                          bg: "gray.200",
-                        },
-                        "& .chakra-switch__track[data-checked]": {
-                          bg: "black",
-                        },
-                      }}
-                    />
-                    <Text fontSize="sm" color="gray.500">
-                      Reset daily
-                    </Text>
+                <Flex
+                  w="full"
+                  justify="space-between"
+                  align="center"
+                  gap={4}
+                  flexWrap="wrap"
+                >
+                  <HStack spacing={4}>
+                    <HStack>
+                      <Switch
+                        isChecked={isTaskDaily}
+                        onChange={(e) => setIsTaskDaily(e.target.checked)}
+                        sx={{
+                          "& .chakra-switch__track": {
+                            bg: "gray.200",
+                          },
+                          "& .chakra-switch__track[data-checked]": {
+                            bg: "black",
+                          },
+                        }}
+                      />
+                      <Text fontSize="sm" color="gray.500">
+                        Daily
+                      </Text>
+                    </HStack>
+                    <HStack>
+                      <Switch
+                        isChecked={isTaskTemporary}
+                        onChange={(e) => setIsTaskTemporary(e.target.checked)}
+                        sx={{
+                          "& .chakra-switch__track": {
+                            bg: "gray.200",
+                          },
+                          "& .chakra-switch__track[data-checked]": {
+                            bg: "black",
+                          },
+                        }}
+                      />
+                      <Text fontSize="sm" color="gray.500">
+                        Temporary
+                      </Text>
+                    </HStack>
+                    <HStack>
+                      <Switch
+                        isChecked={isMultiLevel}
+                        onChange={(e) => setIsMultiLevel(e.target.checked)}
+                        sx={{
+                          "& .chakra-switch__track": {
+                            bg: "gray.200",
+                          },
+                          "& .chakra-switch__track[data-checked]": {
+                            bg: "black",
+                          },
+                        }}
+                      />
+                      <Text fontSize="sm" color="gray.500">
+                        Multi-level
+                      </Text>
+                    </HStack>
                   </HStack>
+                  {isMultiLevel && (
+                    <NumberInput
+                      value={targetCount}
+                      onChange={(_, val) => setTargetCount(val)}
+                      min={1}
+                      max={100}
+                      size="sm"
+                      w="100px"
+                    >
+                      <NumberInputField
+                        borderRadius="5px"
+                        _focus={{
+                          borderColor: "black",
+                          boxShadow: "0 0 0 1px black",
+                        }}
+                      />
+                      <NumberInputStepper>
+                        <NumberIncrementStepper />
+                        <NumberDecrementStepper />
+                      </NumberInputStepper>
+                    </NumberInput>
+                  )}
                   <Button
                     onClick={addTask}
                     bg="black"
@@ -374,7 +530,7 @@ const TaskTracker = () => {
                     _hover={{ bg: "gray.800" }}
                     leftIcon={<PlusCircle size={16} />}
                   >
-                    Add
+                    Add task
                   </Button>
                 </Flex>
               </VStack>
@@ -385,7 +541,7 @@ const TaskTracker = () => {
                     key={task.id}
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
+                    exit={{ opacity: 0, scale: 0.5 }}
                     role="group"
                     p={4}
                     bg={cardBg}
@@ -398,25 +554,27 @@ const TaskTracker = () => {
                     width="100%"
                   >
                     <Flex w="100%" align="center" gap={3}>
-                      <Checkbox
-                        isChecked={task.completed}
-                        onChange={() => toggleTask(task.id)}
-                        _hover={{ transform: "scale(1.1)" }}
-                        sx={{
-                          "& .chakra-checkbox__control": {
-                            bg: "gray.200",
-                            borderRadius: "3px",
-                          },
-                          "& .chakra-checkbox__control[data-checked]": {
-                            bg: "black",
-                            borderColor: "black",
-                            borderRadius: "3px",
-                          },
-                        }}
-                      />
+                      {!task.isMultiLevel && (
+                        <Checkbox
+                          isChecked={task.completed}
+                          onChange={() => toggleTask(task.id)}
+                          _hover={{ transform: "scale(1.1)" }}
+                          sx={{
+                            "& .chakra-checkbox__control": {
+                              bg: "gray.200",
+                              borderRadius: "3px",
+                            },
+                            "& .chakra-checkbox__control[data-checked]": {
+                              bg: "black",
+                              borderColor: "black",
+                              borderRadius: "3px",
+                            },
+                          }}
+                        />
+                      )}
 
-                      <Box flex={1} minW={0} w="100%">
-                        <HStack>
+                      <Box flex={1} minW={0}>
+                        <HStack mb={2}>
                           <Box
                             px={2}
                             py={0.5}
@@ -458,11 +616,24 @@ const TaskTracker = () => {
                               Daily
                             </Box>
                           )}
+                          {task.isTemporary && (
+                            <Box
+                              px={2}
+                              py={0.5}
+                              rounded="full"
+                              bg="purple.100"
+                              color="purple.700"
+                              fontSize="sm"
+                            >
+                              Temporary
+                            </Box>
+                          )}
                         </HStack>
 
                         {editingTaskId === task.id ? (
                           <Flex mt={1} gap={2} align="center">
                             <Input
+                              borderRadius="5px"
                               value={editingText}
                               onChange={(e) => setEditingText(e.target.value)}
                               onKeyPress={(e) =>
@@ -470,6 +641,10 @@ const TaskTracker = () => {
                               }
                               autoFocus
                               size="sm"
+                              _focus={{
+                                borderColor: "black",
+                                boxShadow: "0 0 0 1px black",
+                              }}
                             />
                             <IconButton
                               icon={<Check size={16} />}
@@ -487,22 +662,52 @@ const TaskTracker = () => {
                             />
                           </Flex>
                         ) : (
-                          <Text
-                            mt={1}
-                            textAlign="left"
-                            textDecoration={
-                              task.completed ? "line-through" : "none"
-                            }
-                            color={task.completed ? "gray.500" : "inherit"}
-                          >
-                            {task.text}
-                          </Text>
-                        )}
-
-                        {task.notes && (
-                          <Text mt={1} fontSize="sm" color="gray.500">
-                            {task.notes}
-                          </Text>
+                          <>
+                            <Text
+                              textDecoration={
+                                task.completed ? "line-through" : "none"
+                              }
+                              color={task.completed ? "gray.500" : "inherit"}
+                            >
+                              {task.text}
+                            </Text>
+                            {task.isMultiLevel && (
+                              <Box mt={2}>
+                                <Flex align="center" gap={4} mb={2}>
+                                  <Text fontSize="sm" color="gray.500">
+                                    Progress: {task.currentCount} /{" "}
+                                    {task.targetCount}
+                                  </Text>
+                                  <HStack>
+                                    <IconButton
+                                      size="xs"
+                                      icon={<Minus size={12} />}
+                                      onClick={() => decrementCount(task.id)}
+                                      isDisabled={task.currentCount === 0}
+                                      aria-label="Decrease count"
+                                    />
+                                    <IconButton
+                                      size="xs"
+                                      icon={<Plus size={12} />}
+                                      onClick={() => incrementCount(task.id)}
+                                      isDisabled={
+                                        task.currentCount === task.targetCount
+                                      }
+                                      aria-label="Increase count"
+                                    />
+                                  </HStack>
+                                </Flex>
+                                <Progress
+                                  value={
+                                    (task.currentCount / task.targetCount) * 100
+                                  }
+                                  size="sm"
+                                  rounded="full"
+                                  colorScheme="green"
+                                />
+                              </Box>
+                            )}
+                          </>
                         )}
                       </Box>
 
