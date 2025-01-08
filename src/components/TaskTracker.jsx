@@ -17,6 +17,9 @@ import {
   Trash2,
   Moon,
   Sun,
+  Edit2,
+  Check,
+  X,
 } from "lucide-react";
 import {
   Alert,
@@ -41,6 +44,7 @@ import {
   useColorModeValue,
   useColorMode,
   Switch,
+  IconButton,
 } from "@chakra-ui/react";
 
 const MotionBox = motion(Box);
@@ -117,7 +121,7 @@ const StreakCalendar = ({ streakData }) => {
               >
                 <Box
                   aspectRatio={1}
-                  borderRadius={{ base: "5px" }}
+                  borderRadius="5px"
                   transition="all 0.2s"
                   _hover={{ transform: "scale(1.5)" }}
                   bg={
@@ -189,6 +193,8 @@ const TaskTracker = () => {
   });
   const [deletedTasks, setDeletedTasks] = useState([]);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editingText, setEditingText] = useState("");
   const { colorMode, toggleColorMode } = useColorMode();
 
   useEffect(() => {
@@ -271,6 +277,28 @@ const TaskTracker = () => {
     }
   };
 
+  const startEditing = (taskId, taskText) => {
+    setEditingTaskId(taskId);
+    setEditingText(taskText);
+  };
+
+  const saveEdit = (taskId) => {
+    if (editingText.trim()) {
+      setTasks(
+        tasks.map((task) =>
+          task.id === taskId ? { ...task, text: editingText.trim() } : task
+        )
+      );
+    }
+    setEditingTaskId(null);
+    setEditingText("");
+  };
+
+  const cancelEdit = () => {
+    setEditingTaskId(null);
+    setEditingText("");
+  };
+
   const updateTaskDetails = (taskId, updates) => {
     setTasks(
       tasks.map((task) => (task.id === taskId ? { ...task, ...updates } : task))
@@ -328,10 +356,10 @@ const TaskTracker = () => {
                       onChange={(e) => setIsTaskDaily(e.target.checked)}
                       sx={{
                         "& .chakra-switch__track": {
-                          bg: "gray.200", // Background color when unchecked
+                          bg: "gray.200",
                         },
                         "& .chakra-switch__track[data-checked]": {
-                          bg: "black", // Background color when checked
+                          bg: "black",
                         },
                       }}
                     />
@@ -367,7 +395,7 @@ const TaskTracker = () => {
                     borderColor={borderColor}
                     _hover={{ shadow: "md" }}
                     transition="all 0.2s"
-                    width="100%" //hereo
+                    width="100%"
                   >
                     <Flex w="100%" align="center" gap={3}>
                       <Checkbox
@@ -376,12 +404,12 @@ const TaskTracker = () => {
                         _hover={{ transform: "scale(1.1)" }}
                         sx={{
                           "& .chakra-checkbox__control": {
-                            bg: "gray.200", // Background color when unchecked
+                            bg: "gray.200",
                             borderRadius: "3px",
                           },
                           "& .chakra-checkbox__control[data-checked]": {
-                            bg: "black", // Background color when checked
-                            borderColor: "black", // Border color when checked
+                            bg: "black",
+                            borderColor: "black",
                             borderRadius: "3px",
                           },
                         }}
@@ -431,16 +459,46 @@ const TaskTracker = () => {
                             </Box>
                           )}
                         </HStack>
-                        <Text
-                          mt={1}
-                          textAlign="left"
-                          textDecoration={
-                            task.completed ? "line-through" : "none"
-                          }
-                          color={task.completed ? "gray.500" : "inherit"}
-                        >
-                          {task.text}
-                        </Text>
+
+                        {editingTaskId === task.id ? (
+                          <Flex mt={1} gap={2} align="center">
+                            <Input
+                              value={editingText}
+                              onChange={(e) => setEditingText(e.target.value)}
+                              onKeyPress={(e) =>
+                                e.key === "Enter" && saveEdit(task.id)
+                              }
+                              autoFocus
+                              size="sm"
+                            />
+                            <IconButton
+                              icon={<Check size={16} />}
+                              size="sm"
+                              colorScheme="green"
+                              onClick={() => saveEdit(task.id)}
+                              aria-label="Save edit"
+                            />
+                            <IconButton
+                              icon={<X size={16} />}
+                              size="sm"
+                              colorScheme="red"
+                              onClick={cancelEdit}
+                              aria-label="Cancel edit"
+                            />
+                          </Flex>
+                        ) : (
+                          <Text
+                            mt={1}
+                            textAlign="left"
+                            textDecoration={
+                              task.completed ? "line-through" : "none"
+                            }
+                            color={task.completed ? "gray.500" : "inherit"}
+                          >
+                            {task.text}
+                          </Text>
+                        )}
+
                         {task.notes && (
                           <Text mt={1} fontSize="sm" color="gray.500">
                             {task.notes}
@@ -453,6 +511,15 @@ const TaskTracker = () => {
                         _groupHover={{ opacity: 1 }}
                         transition="opacity 0.2s"
                       >
+                        {editingTaskId !== task.id && (
+                          <IconButton
+                            variant="ghost"
+                            size="sm"
+                            icon={<Edit2 size={16} />}
+                            onClick={() => startEditing(task.id, task.text)}
+                            aria-label="Edit task"
+                          />
+                        )}
                         <Menu>
                           <MenuButton as={Button} variant="ghost" size="sm">
                             <ChevronDown size={16} />
